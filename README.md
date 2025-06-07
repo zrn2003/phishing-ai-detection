@@ -25,6 +25,32 @@ PhishGuard is a web application designed to help users identify potentially mali
     *   Node.js
     *   npm
 
+## Components & Libraries Used
+
+This project leverages several key libraries and UI components:
+
+*   **Core Framework & UI**:
+    *   **Next.js**: Provides the React framework for server-side rendering, routing, and more.
+    *   **React**: Powers the user interface components.
+    *   **TypeScript**: Adds static typing for improved code quality.
+*   **Styling & UI Components**:
+    *   **Tailwind CSS**: A utility-first CSS framework for rapid UI development.
+    *   **ShadCN UI**: A collection of beautifully designed, accessible, and customizable React components built on top of Tailwind CSS and Radix UI. Specific components used include:
+        *   `Input`
+        *   `Button`
+        *   `Alert`, `AlertDescription`, `AlertTitle`
+        *   `Card`, `CardHeader`, `CardContent`, `CardTitle`, `CardDescription`
+        *   `Badge`
+        *   `Toaster` & `useToast` (for notifications)
+    *   **Lucide React**: Provides a comprehensive set of beautiful and consistent icons.
+*   **Form Handling & Validation**:
+    *   **React Hook Form**: Manages form state and validation efficiently.
+    *   **Zod**: A TypeScript-first schema declaration and validation library, used for validating form inputs.
+*   **State Management**:
+    *   **React Hooks**: `useState`, `useEffect`, `useActionState` for managing component state and side effects.
+*   **Utilities**:
+    *   `clsx` & `tailwind-merge`: For constructing conditional class names.
+
 ## Getting Started
 
 Follow these instructions to set up and run PhishGuard on your local machine.
@@ -121,6 +147,10 @@ You should now be able to enter URLs into the PhishGuard interface and receive A
     *   `src/ai/flows/`: Contains the Genkit flow definitions (e.g., `generate-explanation.ts`).
 *   `src/components/`: Reusable React components.
     *   `src/components/ui/`: ShadCN UI components.
+    *   `src/components/PhishGuardLogo.tsx`: The application's logo component.
+    *   `src/components/UrlResultCard.tsx`: Component to display URL analysis results.
+*   `src/hooks/`: Custom React hooks (e.g., `use-toast.ts`).
+*   `src/lib/`: Utility functions.
 *   `public/`: Static assets.
 
 ## Contributing
