@@ -1,8 +1,8 @@
 "use client";
 
 import type React from 'react';
-import { useState, useEffect } from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useState, useEffect, useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -41,7 +41,7 @@ function SubmitButton() {
 }
 
 export default function HomePage() {
-  const [formState, formAction] = useFormState(analyzeUrlAction, initialState);
+  const [formState, formAction] = useActionState(analyzeUrlAction, initialState);
   const [currentUrl, setCurrentUrl] = useState('');
   const [displayResult, setDisplayResult] = useState<UrlResult | null>(null);
   const { toast } = useToast();
