@@ -1,3 +1,4 @@
+
 // This file uses server-side code.
 "use server";
 
@@ -16,67 +17,73 @@ export interface UrlAnalysisResult {
   submittedUrl: string;
 }
 
-interface UrlFeatures {
-  urlLength: number;
-  hasHttps: boolean;
-  subdomainCount: number;
-  hasIpAddress: boolean;
-  specialCharsCount: number;
-  keywordsFound: string[];
+interface PhishingApiReport {
+  classification: 'safe' | 'phishing';
+  confidenceScore?: number;
+  detectedFlags?: string[];
+  threatType?: string;
+  errorMessage?: string;
 }
 
-// Mock feature extraction
-function extractFeatures(url: string): UrlFeatures {
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(url);
-  } catch (e) {
-    // Handle cases where URL constructor fails (e.g. invalid URL not caught by Zod, though unlikely)
-    // For simplicity, returning default/error features. A real scenario might throw or log.
+// Mock function to simulate calling an external Phishing Detection API
+async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiReport> {
+  // Simulate API call latency
+  await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+
+  const lowerUrl = url.toLowerCase();
+  
+  // Specific test cases for mock API
+  if (lowerUrl.includes("phishing.example.com") || lowerUrl.includes("malicious-site.org")) {
     return {
-      urlLength: url.length,
-      hasHttps: false,
-      subdomainCount: 0,
-      hasIpAddress: false,
-      specialCharsCount: (url.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/g) || []).length,
-      keywordsFound: [],
+      classification: 'phishing',
+      confidenceScore: 0.95,
+      detectedFlags: ["known_phishing_domain", "suspicious_keywords_in_path"],
+      threatType: "Deceptive Content",
     };
   }
-  
-  const specialCharsRegex = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/g;
-  const commonPhishingKeywords = ["login", "update", "verify", "secure", "account", "bank", "password", "confirm", "support"];
-  
+  if (/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(new URL(url).hostname)) {
+    return {
+      classification: 'phishing',
+      confidenceScore: 0.80,
+      detectedFlags: ["ip_address_as_host", "no_ssl_on_sensitive_path_placeholder"], // Placeholder, actual SSL check is harder
+      threatType: "Network Anomaly",
+    };
+  }
+  if (lowerUrl.includes("safe.example.com") || lowerUrl.startsWith("https://google.com")) {
+    return {
+      classification: 'safe',
+      confidenceScore: 0.99,
+      detectedFlags: ["trusted_domain", "valid_ssl"],
+    };
+  }
+  if (url.length > 75 && (url.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/g) || []).length > 5 && !url.startsWith("https://")) {
+     return {
+        classification: 'phishing',
+        confidenceScore: 0.70,
+        detectedFlags: ["long_url", "excessive_special_chars", "no_https"],
+        threatType: "Suspicious URL Structure"
+     };
+  }
+
+  // Default mock response or more nuanced logic can be added here
+  // For simplicity, default to safe if not caught by specific phishing rules
+  // In a real API, it might return 'unknown' or require more analysis
+  if (Math.random() > 0.8) { // Simulate occasional phishing detection for other URLs
+    return {
+      classification: 'phishing',
+      confidenceScore: 0.65,
+      detectedFlags: ["heuristic_detection", "uncommon_tld_placeholder"],
+      threatType: "Heuristic Analysis",
+    };
+  }
+
   return {
-    urlLength: url.length,
-    hasHttps: parsedUrl.protocol === "https:",
-    subdomainCount: Math.max(0, parsedUrl.hostname.split(".").length - 2), // Approximation
-    hasIpAddress: /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(parsedUrl.hostname),
-    specialCharsCount: (url.match(specialCharsRegex) || []).length,
-    keywordsFound: commonPhishingKeywords.filter(kw => url.toLowerCase().includes(kw)),
+    classification: 'safe',
+    confidenceScore: 0.85,
+    detectedFlags: ["general_scan_ok"],
   };
 }
 
-// Mock classification logic
-function classifyUrl(url: string, features: UrlFeatures): 'safe' | 'phishing' {
-  const lowerUrl = url.toLowerCase();
-  if (lowerUrl.includes("phishing.example.com") || lowerUrl.includes("malicious-site.org")) {
-    return 'phishing';
-  }
-  if (features.hasIpAddress) {
-    return 'phishing';
-  }
-  if (features.keywordsFound.length >= 2 && !features.hasHttps) {
-    return 'phishing';
-  }
-  if (features.urlLength > 75 && features.specialCharsCount > 5) {
-     return 'phishing';
-  }
-  if (lowerUrl.includes("safe.example.com")) {
-    return 'safe';
-  }
-  // Default to safe for this mock
-  return 'safe';
-}
 
 export async function analyzeUrlAction(prevState: any, formData: FormData): Promise<UrlAnalysisResult> {
   const rawUrl = formData.get("url");
@@ -95,24 +102,33 @@ export async function analyzeUrlAction(prevState: any, formData: FormData): Prom
   const url = validatedFields.data.url;
 
   try {
-    // 1. Feature Extraction (mocked)
-    const features = extractFeatures(url);
+    // 1. Call the (mocked) Phishing Detection API
+    const apiReport = await fetchRealtimePhishingAnalysis(url);
 
-    // 2. Classification (mocked)
-    const classification = classifyUrl(url, features);
+    if (apiReport.errorMessage) {
+      return {
+        url,
+        classification: 'error',
+        explanation: `API Error: ${apiReport.errorMessage}`,
+        error: apiReport.errorMessage,
+        submittedUrl: url,
+      };
+    }
 
-    // 3. Generate Explanation using AI flow
+    // 2. Prepare input for the explanation generation flow
+    // The 'features' will now be the report from the API
     const explanationInput: GenerateExplanationInput = {
       url,
-      classification,
-      features: features as Record<string, any>, // Cast because Genkit schema is z.record(z.any())
+      classification: apiReport.classification,
+      features: apiReport as Record<string, any>, // Pass the whole API report as features
     };
     
+    // 3. Generate Explanation using AI flow
     const explanationResult = await generateExplanation(explanationInput);
 
     return {
       url,
-      classification,
+      classification: apiReport.classification,
       explanation: explanationResult.explanation,
       error: null,
       submittedUrl: url,
@@ -124,6 +140,8 @@ export async function analyzeUrlAction(prevState: any, formData: FormData): Prom
     if (error instanceof Error) {
       errorMessage = error.message;
     }
+    // Check if the error is from the API mock itself (e.g. network error simulation)
+    // For this example, we'll assume any catch here is a general processing error.
     return {
       url,
       classification: 'error',
