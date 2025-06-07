@@ -21,6 +21,15 @@ const GenerateExplanationInputSchema = z.object({
 });
 export type GenerateExplanationInput = z.infer<typeof GenerateExplanationInputSchema>;
 
+// Specific schema for the prompt's input, where features is a string
+const GenerateExplanationPromptInternalInputSchema = z.object({
+  url: z.string().describe('The URL to explain the classification for.'),
+  classification: z.enum(['safe', 'phishing']).describe('The classification of the URL, determined by an analysis process.'),
+  featuresString: z.string().describe('The JSON stringified detailed analysis report from a threat intelligence API. This includes fields like classification, confidenceScore, detectedFlags, and threatType.'),
+});
+type GenerateExplanationPromptInternalInput = z.infer<typeof GenerateExplanationPromptInternalInputSchema>;
+
+
 const GenerateExplanationOutputSchema = z.object({
   explanation: z.string().describe('The comprehensive explanation of why the URL was classified as phishing or safe, including potential risks and attack vectors if applicable.'),
 });
@@ -32,14 +41,14 @@ export async function generateExplanation(input: GenerateExplanationInput): Prom
 
 const prompt = ai.definePrompt({
   name: 'generateExplanationPrompt',
-  input: {schema: GenerateExplanationInputSchema},
+  input: {schema: GenerateExplanationPromptInternalInputSchema}, // Use the internal schema
   output: {schema: GenerateExplanationOutputSchema},
   prompt: `You are a cybersecurity expert specializing in analyzing URLs and explaining their safety status to users in an easy-to-understand manner.
 You have been provided with a URL, its classification ('safe' or 'phishing'), and a detailed analysis report (features) from a threat intelligence API, simulating services like Google Safe Browsing.
 
 URL: {{{url}}}
 Classification: {{{classification}}}
-Analysis Report (Features): {{{JSON.stringify features}}}
+Analysis Report (Features): {{{featuresString}}}
 
 Your task is to generate a comprehensive explanation.
 
@@ -65,13 +74,20 @@ Explanation: `,
 const generateExplanationFlow = ai.defineFlow(
   {
     name: 'generateExplanationFlow',
-    inputSchema: GenerateExplanationInputSchema,
+    inputSchema: GenerateExplanationInputSchema, // Flow's external input
     outputSchema: GenerateExplanationOutputSchema,
   },
-  async input => {
+  async (input: GenerateExplanationInput) => {
+    // Prepare the payload for the prompt
+    const promptInputPayload: GenerateExplanationPromptInternalInput = {
+      url: input.url,
+      classification: input.classification,
+      featuresString: JSON.stringify(input.features, null, 2), // Stringify features here
+    };
+
     // Log the input to the AI to help with debugging prompts
-    // console.log('Generating explanation for:', JSON.stringify(input, null, 2));
-    const {output} = await prompt(input);
+    // console.log('Generating explanation for (prompt payload):', JSON.stringify(promptInputPayload, null, 2));
+    const {output} = await prompt(promptInputPayload);
     if (!output) {
       // Fallback or error handling if AI returns no output
       return { explanation: "Could not generate an explanation at this time. The URL classification stands as reported." };
