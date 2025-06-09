@@ -35,7 +35,21 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
   await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
 
   const lowerUrl = url.toLowerCase();
-  const urlObj = new URL(url); // For easier parsing of hostname etc.
+  let urlObj: URL;
+  try {
+    urlObj = new URL(url); // For easier parsing of hostname etc.
+  } catch (e) {
+    // This case should ideally be caught by Zod validation upstream,
+    // but as a fallback for direct calls or unexpected scenarios.
+    return {
+      classification: 'phishing', // Treat invalid URLs as suspicious by default in this mock
+      confidenceScore: 0.5,
+      detectedFlags: ["invalid_url_structure"],
+      threatType: "Invalid URL",
+      errorMessage: "The provided URL was malformed.",
+    };
+  }
+
 
   // Specific test cases for mock API
   if (lowerUrl.includes("phishing.example.com") || lowerUrl.includes("malicious-site.org")) {
@@ -46,7 +60,8 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
       threatType: "Deceptive Content/Known Phishing",
     };
   }
-  if (/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(urlObj.hostname)) {
+  // Check for IP address as hostname
+  if (urlObj.hostname && /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(urlObj.hostname)) {
     return {
       classification: 'phishing',
       confidenceScore: 0.80,
@@ -54,6 +69,7 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
       threatType: "Network Anomaly/Suspicious Infrastructure",
     };
   }
+  // Specific safe cases
   if (lowerUrl.includes("safe.example.com") || lowerUrl.startsWith("https://google.com") || lowerUrl.startsWith("https://github.com")) {
     return {
       classification: 'safe',
@@ -62,6 +78,7 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
       threatType: "None",
     };
   }
+  // Heuristic: Long URL, many special characters, no HTTPS
    if (url.length > 75 && (url.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/g) || []).length > 5 && !url.startsWith("https://")) {
      return {
         classification: 'phishing',
@@ -70,7 +87,8 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
         threatType: "Suspicious URL Structure"
      };
   }
-  if (lowerUrl.includes("login-very-secure-bank.com") && !lowerUrl.startsWith("https://actual-bank.com")){
+  // Heuristic: Domain impersonation
+  if (lowerUrl.includes("login-very-secure-bank.com") && !lowerUrl.startsWith("https://actual-bank.com")){ // Ensure "actual-bank.com" is a placeholder for a real bank
       return {
         classification: 'phishing',
         confidenceScore: 0.90,
@@ -79,9 +97,9 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
       }
   }
 
-
   // Default mock response or more nuanced logic can be added here
-  if (Math.random() > 0.7) { // Simulate occasional phishing detection for other URLs
+  // Adjusting random chance: 50% chance of phishing for URLs not caught by specific rules
+  if (Math.random() > 0.5) { 
     return {
       classification: 'phishing',
       confidenceScore: 0.65,
@@ -122,8 +140,8 @@ export async function analyzeUrlAction(prevState: any, formData: FormData): Prom
     // 1. Call the (mocked) enhanced Phishing Detection API
     const apiReport = await fetchRealtimePhishingAnalysis(url);
 
-    if (apiReport.errorMessage) {
-      // This case is if the API itself reports an operational error
+    if (apiReport.errorMessage && apiReport.classification !== 'safe' && apiReport.classification !== 'phishing') {
+      // This case is if the API itself reports an operational error leading to no clear classification
       return {
         url,
         classification: 'error',
@@ -143,19 +161,20 @@ export async function analyzeUrlAction(prevState: any, formData: FormData): Prom
     
     // 3. Generate Explanation using AI flow
     let explanationResultText = "No explanation generated.";
-    if (apiReport.classification !== 'error') { // Only generate explanation if API call was successful
+    // Only generate explanation if API call was successful in classification
+    if (apiReport.classification === 'safe' || apiReport.classification === 'phishing') { 
         const explanationResult = await generateExplanation(explanationInput);
         explanationResultText = explanationResult.explanation;
-    } else {
-        explanationResultText = apiReport.errorMessage || "Could not analyze URL due to an API error.";
+    } else { // Handles cases where classification might be error from API or unexpected
+        explanationResultText = apiReport.errorMessage || "Could not analyze URL due to an API error or indeterminate classification.";
     }
 
 
     return {
       url,
-      classification: apiReport.classification,
+      classification: apiReport.classification, // This should be 'safe', 'phishing', or potentially 'error' if API returned that.
       explanation: explanationResultText,
-      error: null, // No error in this path, API error handled above
+      error: apiReport.classification === 'error' ? (apiReport.errorMessage || "API error") : null,
       submittedUrl: url,
       // apiReport: apiReport, // Optionally include the raw report in the result
     };
