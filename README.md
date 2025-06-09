@@ -66,7 +66,7 @@ Follow these instructions to set up and run PhishGuard on your local machine.
 Open your terminal and clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone [<repository-url>](https://github.com/zrn2003/phishing-ai-detection)
 cd <repository-folder-name>
 ```
 
