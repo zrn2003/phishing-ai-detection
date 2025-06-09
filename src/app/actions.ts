@@ -11,12 +11,10 @@ const AnalyzeUrlInputSchema = z.object({
 
 export interface UrlAnalysisResult {
   url: string;
-  classification: 'safe' | 'phishing' | 'error';
+  classification: 'safe' | 'phishing' | 'error' | null; // Allow null for initial state
   explanation: string | null;
   error?: string | null;
   submittedUrl: string;
-  // We can also include the raw report for more detailed display if needed later
-  // apiReport?: PhishingApiReport | null; 
 }
 
 // Interface for our mock Phishing Detection API report
@@ -29,20 +27,21 @@ interface PhishingApiReport {
 }
 
 // Mock function to simulate calling an external Phishing Detection API
-// This will now return a more detailed report
 async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiReport> {
+  console.log("--- fetchRealtimePhishingAnalysis ---");
+  console.log("Analyzing URL:", url);
+
   // Simulate API call latency
   await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
 
   const lowerUrl = url.toLowerCase();
   let urlObj: URL;
   try {
-    urlObj = new URL(url); // For easier parsing of hostname etc.
+    urlObj = new URL(url);
   } catch (e) {
-    // This case should ideally be caught by Zod validation upstream,
-    // but as a fallback for direct calls or unexpected scenarios.
+    console.log("Error parsing URL:", e);
     return {
-      classification: 'phishing', // Treat invalid URLs as suspicious by default in this mock
+      classification: 'phishing',
       confidenceScore: 0.5,
       detectedFlags: ["invalid_url_structure"],
       threatType: "Invalid URL",
@@ -50,9 +49,9 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
     };
   }
 
-
   // Specific test cases for mock API
   if (lowerUrl.includes("phishing.example.com") || lowerUrl.includes("malicious-site.org")) {
+    console.log("Condition met: specific phishing domain");
     return {
       classification: 'phishing',
       confidenceScore: 0.95,
@@ -60,8 +59,10 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
       threatType: "Deceptive Content/Known Phishing",
     };
   }
+
   // Check for IP address as hostname
   if (urlObj.hostname && /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(urlObj.hostname)) {
+    console.log("Condition met: IP address as host");
     return {
       classification: 'phishing',
       confidenceScore: 0.80,
@@ -69,8 +70,10 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
       threatType: "Network Anomaly/Suspicious Infrastructure",
     };
   }
+
   // Specific safe cases
   if (lowerUrl.includes("safe.example.com") || lowerUrl.startsWith("https://google.com") || lowerUrl.startsWith("https://github.com")) {
+    console.log("Condition met: specific safe domain");
     return {
       classification: 'safe',
       confidenceScore: 0.99,
@@ -78,8 +81,10 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
       threatType: "None",
     };
   }
+
   // Heuristic: Long URL, many special characters, no HTTPS
    if (url.length > 75 && (url.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/g) || []).length > 5 && !url.startsWith("https://")) {
+     console.log("Condition met: long URL, special chars, no HTTPS heuristic");
      return {
         classification: 'phishing',
         confidenceScore: 0.70,
@@ -87,8 +92,10 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
         threatType: "Suspicious URL Structure"
      };
   }
+
   // Heuristic: Domain impersonation
-  if (lowerUrl.includes("login-very-secure-bank.com") && !lowerUrl.startsWith("https://actual-bank.com")){ // Ensure "actual-bank.com" is a placeholder for a real bank
+  if (lowerUrl.includes("login-very-secure-bank.com") && !lowerUrl.startsWith("https://actual-bank.com")){
+      console.log("Condition met: domain impersonation heuristic");
       return {
         classification: 'phishing',
         confidenceScore: 0.90,
@@ -98,8 +105,11 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
   }
 
   // Default mock response or more nuanced logic can be added here
-  // Adjusting random chance: 50% chance of phishing for URLs not caught by specific rules
-  if (Math.random() > 0.5) { 
+  const randomNumber = Math.random();
+  console.log("Random chance check for phishing. Math.random() was:", randomNumber);
+  // 50% chance of phishing for URLs not caught by specific rules
+  if (randomNumber > 0.5) { 
+    console.log("Condition met: random chance marked as phishing");
     return {
       classification: 'phishing',
       confidenceScore: 0.65,
@@ -108,7 +118,7 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
     };
   }
 
-  // Default to safe if not caught by specific phishing rules
+  console.log("Defaulting to safe classification");
   return {
     classification: 'safe',
     confidenceScore: 0.85,
@@ -119,65 +129,75 @@ async function fetchRealtimePhishingAnalysis(url: string): Promise<PhishingApiRe
 
 
 export async function analyzeUrlAction(prevState: any, formData: FormData): Promise<UrlAnalysisResult> {
+  console.log("\n--- analyzeUrlAction ---");
   const rawUrl = formData.get("url");
+  const submittedUrlString = typeof rawUrl === 'string' ? rawUrl : "";
+  console.log("Received URL for analysis:", submittedUrlString);
+
   const validatedFields = AnalyzeUrlInputSchema.safeParse({ url: rawUrl });
 
-  const submittedUrlString = typeof rawUrl === 'string' ? rawUrl : "";
-
   if (!validatedFields.success) {
-    return {
+    const errorMessages = validatedFields.error.errors.map(e => e.message).join(', ');
+    console.log("Validation failed:", errorMessages);
+    const result: UrlAnalysisResult = {
       url: submittedUrlString,
       classification: 'error',
-      explanation: "Invalid URL provided. " + validatedFields.error.errors.map(e => e.message).join(', '),
-      error: validatedFields.error.errors.map(e => e.message).join(', '),
+      explanation: "Invalid URL provided. " + errorMessages,
+      error: errorMessages,
       submittedUrl: submittedUrlString,
     };
+    console.log("Returning validation error result:", JSON.stringify(result, null, 2));
+    return result;
   }
 
   const url = validatedFields.data.url;
+  console.log("Validated URL:", url);
 
   try {
-    // 1. Call the (mocked) enhanced Phishing Detection API
+    console.log("Calling fetchRealtimePhishingAnalysis...");
     const apiReport = await fetchRealtimePhishingAnalysis(url);
+    console.log("Received API Report:", JSON.stringify(apiReport, null, 2));
 
     if (apiReport.errorMessage && apiReport.classification !== 'safe' && apiReport.classification !== 'phishing') {
-      // This case is if the API itself reports an operational error leading to no clear classification
-      return {
+      console.log("API reported an operational error:", apiReport.errorMessage);
+      const result: UrlAnalysisResult = {
         url,
         classification: 'error',
         explanation: `Analysis API Error: ${apiReport.errorMessage}`,
         error: apiReport.errorMessage,
         submittedUrl: url,
       };
+      console.log("Returning API operational error result:", JSON.stringify(result, null, 2));
+      return result;
     }
 
-    // 2. Prepare input for the explanation generation flow
-    // The 'features' will now be the detailed report from the API
+    console.log("Preparing input for generateExplanation AI flow...");
     const explanationInput: GenerateExplanationInput = {
       url,
-      classification: apiReport.classification, // 'safe' or 'phishing'
-      features: apiReport as Record<string, any>, // Pass the whole API report as features
+      classification: apiReport.classification,
+      features: apiReport as Record<string, any>,
     };
     
-    // 3. Generate Explanation using AI flow
     let explanationResultText = "No explanation generated.";
-    // Only generate explanation if API call was successful in classification
     if (apiReport.classification === 'safe' || apiReport.classification === 'phishing') { 
+        console.log("Calling generateExplanation AI flow...");
         const explanationResult = await generateExplanation(explanationInput);
         explanationResultText = explanationResult.explanation;
-    } else { // Handles cases where classification might be error from API or unexpected
+        console.log("Received explanation from AI:", explanationResultText);
+    } else {
         explanationResultText = apiReport.errorMessage || "Could not analyze URL due to an API error or indeterminate classification.";
+        console.log("Skipped AI explanation due to API error/classification:", explanationResultText);
     }
 
-
-    return {
+    const finalResult: UrlAnalysisResult = {
       url,
-      classification: apiReport.classification, // This should be 'safe', 'phishing', or potentially 'error' if API returned that.
+      classification: apiReport.classification,
       explanation: explanationResultText,
       error: apiReport.classification === 'error' ? (apiReport.errorMessage || "API error") : null,
       submittedUrl: url,
-      // apiReport: apiReport, // Optionally include the raw report in the result
     };
+    console.log("Returning final success result:", JSON.stringify(finalResult, null, 2));
+    return finalResult;
 
   } catch (error) {
     console.error("Error in analyzeUrlAction:", error);
@@ -185,14 +205,14 @@ export async function analyzeUrlAction(prevState: any, formData: FormData): Prom
     if (error instanceof Error) {
       errorMessage = error.message;
     }
-     // This catches errors in the overall action, not just the API call.
-    return {
-      url: url || submittedUrlString, // Use validated url if available
+    const errorResult: UrlAnalysisResult = {
+      url: url || submittedUrlString,
       classification: 'error',
       explanation: `Failed to analyze URL: ${errorMessage}`,
       error: errorMessage,
       submittedUrl: url || submittedUrlString,
     };
+    console.log("Returning caught error result:", JSON.stringify(errorResult, null, 2));
+    return errorResult;
   }
 }
-
