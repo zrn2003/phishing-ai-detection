@@ -2,14 +2,6 @@
 // This file uses server-side code.
 'use server';
 
-/**
- * @fileOverview Generates an explanation of why a URL was classified as phishing or safe,
- * based on analysis data likely from a security API.
- *
- * - generateExplanation - A function that generates the explanation.
- * - GenerateExplanationInput - The input type for the generateExplanation function.
- * - GenerateExplanationOutput - The return type for the generateExplanation function.
- */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
